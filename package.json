@@ -1,0 +1,27 @@
+{
+  "name": "kitty-kit",
+  "version": "1.0.0",
+  "description": "Personal cross-browser extension with modular architecture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt --browser firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build --browser firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip --browser firefox",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wxt-dev/module-react": "^1.2.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "wxt": "^0.20.20"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}
