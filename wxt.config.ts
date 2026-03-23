@@ -27,7 +27,7 @@ export default defineConfig({
         ],
         browser_specific_settings: {
           gecko: {
-            id: 'kitty-kit@example.com',
+            id: 'settimeout1000@gmail.com',
             strict_min_version: '109.0',
           },
         },
