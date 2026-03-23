@@ -1,6 +1,6 @@
 {
   "name": "kitty-kit",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Personal cross-browser extension with modular architecture",
   "private": true,
   "type": "module",

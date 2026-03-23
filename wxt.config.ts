@@ -28,12 +28,12 @@ export default defineConfig({
         browser_specific_settings: {
           gecko: {
             id: 'settimeout1000@gmail.com',
-            strict_min_version: '109.0',
+            strict_min_version: '113.0',
+            data_collection_permissions: {
+              required: ['none'],
+              optional: [],
+            },
           },
-        },
-        data_collection_permissions: {
-          local_storage_usage: true,
-          personal_data_collection: false,
         },
       };
     }
