@@ -31,6 +31,10 @@ export default defineConfig({
             strict_min_version: '109.0',
           },
         },
+        data_collection_permissions: {
+          local_storage_usage: true,
+          personal_data_collection: false,
+        },
       };
     }
 
