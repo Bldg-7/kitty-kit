@@ -14,12 +14,9 @@ export function App() {
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 720, margin: '0 auto', padding: 24 }}>
-      <h1 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700 }}>Kitty Kit Settings</h1>
-
-      <div style={{ display: 'flex', gap: 24 }}>
-        <div style={{ flex: '0 0 240px' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#6b7280' }}>Modules</h3>
+    <div style={{ fontFamily: 'system-ui, sans-serif', width: 720, height: 480, margin: '0 auto', padding: 24, boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', gap: 24, flex: 1, minHeight: 0 }}>
+        <div style={{ flex: '0 0 240px', overflowY: 'auto' }}>
           {all.map((mod) => (
             <div
               key={mod.id}
@@ -45,7 +42,7 @@ export function App() {
           ))}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
           {selectedModule ? (
             <div>
               <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>

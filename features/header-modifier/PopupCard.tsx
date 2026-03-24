@@ -56,10 +56,6 @@ export function PopupCard() {
   const profiles = allProfiles ?? [];
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
 
-  const activeRuleCount = profiles
-    .filter((p) => p.enabled)
-    .reduce((sum, p) => sum + p.rules.filter((r) => r.enabled).length, 0);
-
   const save = (updated: Profile[]) => setProfiles(updated);
 
   const addProfile = async () => {
@@ -222,10 +218,6 @@ export function PopupCard() {
   // --- View: Profile List ---
   return (
     <>
-      <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
-        Active rules: <strong>{activeRuleCount}</strong>
-      </p>
-
       {profiles.map((profile) => {
         const enabledRules = profile.rules.filter((r) => r.enabled).length;
         return (
