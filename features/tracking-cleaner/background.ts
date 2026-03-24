@@ -26,15 +26,15 @@ async function applyDeclarativeNetRequestRules() {
     .filter((r) => r.id >= RULE_ID_START && r.id <= RULE_ID_MAX)
     .map((r) => r.id);
 
-  const addRules = params.map((param, i) => ({
-    id: RULE_ID_START + i,
+  const addRules = params.length > 0 ? [{
+    id: RULE_ID_START,
     priority: 1,
     action: {
       type: 'redirect' as const,
       redirect: {
         transform: {
           queryTransform: {
-            removeParams: [param],
+            removeParams: params,
           },
         },
       },
@@ -45,7 +45,7 @@ async function applyDeclarativeNetRequestRules() {
         ? { excludedRequestDomains: excluded }
         : {}),
     },
-  }));
+  }] : [];
 
   await browser.declarativeNetRequest.updateDynamicRules({
     removeRuleIds,
