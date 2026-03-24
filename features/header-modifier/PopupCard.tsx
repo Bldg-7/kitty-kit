@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Card } from '@/components/Card';
 import { Toggle } from '@/components/Toggle';
 import { useStorage } from '@/hooks/useStorage';
 import { browser } from 'wxt/browser';
@@ -26,9 +25,20 @@ const s = {
   label: { fontSize: 12, color: '#6b7280', marginBottom: 2, display: 'block' as const },
   ruleItem: { padding: '8px', border: '1px solid #e5e7eb', borderRadius: 4, marginBottom: 6, fontSize: 12 },
   headerRow: { display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' as const, flexWrap: 'wrap' as const } as const,
+  backBtn: { padding: 0, fontSize: 13, border: 'none', background: 'none', color: '#6366f1', cursor: 'pointer', fontWeight: 500 } as const,
+  profileItem: {
+    padding: '10px 12px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    marginBottom: 6,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  } as const,
 };
 
-type View = 'list' | 'edit-rule';
+type View = 'list' | 'detail' | 'edit-rule';
 
 interface EditState {
   profileId: string;
@@ -39,10 +49,12 @@ interface EditState {
 export function PopupCard() {
   const [allProfiles, setProfiles] = useStorage(store.profiles);
   const [view, setView] = useState<View>('list');
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [newProfileName, setNewProfileName] = useState('');
 
   const profiles = allProfiles ?? [];
+  const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
 
   const activeRuleCount = profiles
     .filter((p) => p.enabled)
@@ -64,6 +76,10 @@ export function PopupCard() {
 
   const removeProfile = async (id: string) => {
     await save(profiles.filter((p) => p.id !== id));
+    if (selectedProfileId === id) {
+      setSelectedProfileId(null);
+      setView('list');
+    }
   };
 
   const toggleProfile = async (id: string) => {
@@ -133,57 +149,112 @@ export function PopupCard() {
       if (isNew) return { ...p, rules: [...p.rules, rule] };
       return { ...p, rules: p.rules.map((r) => r.id === rule.id ? rule : r) };
     }));
-    setView('list');
+    setView('detail');
     setEditState(null);
   };
 
+  const openDetail = (profileId: string) => {
+    setSelectedProfileId(profileId);
+    setView('detail');
+  };
+
+  // --- View: Edit Rule ---
   if (view === 'edit-rule' && editState) {
-    return <RuleEditor state={editState} setState={setEditState} onSave={saveRule} onCancel={() => { setView('list'); setEditState(null); }} />;
+    return (
+      <RuleEditor
+        state={editState}
+        setState={setEditState}
+        onSave={saveRule}
+        onCancel={() => { setView('detail'); setEditState(null); }}
+      />
+    );
   }
 
-  return (
-    <Card title="Header Modifier">
-      <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
-        Active rules: <strong>{activeRuleCount}</strong>
-      </p>
+  // --- View: Profile Detail ---
+  if (view === 'detail' && selectedProfile) {
+    const enabledRules = selectedProfile.rules.filter((r) => r.enabled).length;
+    return (
+      <>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <button onClick={() => setView('list')} style={s.backBtn}>← Back</button>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{selectedProfile.name}</span>
+          <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+            {enabledRules}/{selectedProfile.rules.length} rules active
+          </span>
+        </div>
 
-      {profiles.map((profile) => (
-        <div key={profile.id} style={{ marginBottom: 12, border: '1px solid #e5e7eb', borderRadius: 6, padding: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <Toggle checked={profile.enabled} onChange={() => toggleProfile(profile.id)} label={profile.name} />
-            <button onClick={() => removeProfile(profile.id)} style={s.btnDanger}>Delete</button>
-          </div>
-
-          {profile.rules.map((rule) => (
+        {selectedProfile.rules.length === 0 ? (
+          <p style={{ fontSize: 12, color: '#9ca3af', margin: '12px 0' }}>No rules yet.</p>
+        ) : (
+          selectedProfile.rules.map((rule) => (
             <div key={rule.id} style={s.ruleItem}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Toggle checked={rule.enabled} onChange={() => toggleRule(profile.id, rule.id)} label={rule.urlPattern} />
+                <Toggle checked={rule.enabled} onChange={() => toggleRule(selectedProfile.id, rule.id)} label={rule.urlPattern} />
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => startEditRule(profile.id, rule)} style={s.btn}>Edit</button>
-                  <button onClick={() => removeRule(profile.id, rule.id)} style={s.btnDanger}>X</button>
+                  <button onClick={() => startEditRule(selectedProfile.id, rule)} style={s.btn}>Edit</button>
+                  <button onClick={() => removeRule(selectedProfile.id, rule.id)} style={s.btnDanger}>X</button>
                 </div>
               </div>
               <div style={{ color: '#9ca3af', marginTop: 2 }}>
                 {rule.headers.length} header action(s)
               </div>
             </div>
-          ))}
+          ))
+        )}
 
-          <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-            <button onClick={() => startAddRule(profile.id)} style={s.btnPrimary}>+ Rule</button>
-            <select
-              onChange={(e) => { if (e.target.value) { addPresetRule(profile.id, e.target.value); e.target.value = ''; } }}
-              style={s.select}
-              defaultValue=""
-            >
-              <option value="" disabled>+ Preset</option>
-              {presets.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+        <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => startAddRule(selectedProfile.id)} style={s.btnPrimary}>+ Rule</button>
+          <select
+            onChange={(e) => { if (e.target.value) { addPresetRule(selectedProfile.id, e.target.value); e.target.value = ''; } }}
+            style={s.select}
+            defaultValue=""
+          >
+            <option value="" disabled>+ Preset</option>
+            {presets.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
-      ))}
+      </>
+    );
+  }
+
+  // --- View: Profile List ---
+  return (
+    <>
+      <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
+        Active rules: <strong>{activeRuleCount}</strong>
+      </p>
+
+      {profiles.map((profile) => {
+        const enabledRules = profile.rules.filter((r) => r.enabled).length;
+        return (
+          <div key={profile.id} style={s.profileItem} onClick={() => openDetail(profile.id)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <div onClick={(e) => e.stopPropagation()}>
+                <Toggle checked={profile.enabled} onChange={() => toggleProfile(profile.id)} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {profile.name}
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>
+                  {profile.rules.length} rules · {enabledRules} active
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); removeProfile(profile.id); }}
+                style={s.btnDanger}
+              >
+                Delete
+              </button>
+              <span style={{ color: '#9ca3af', fontSize: 12 }}>›</span>
+            </div>
+          </div>
+        );
+      })}
 
       <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
         <input
@@ -194,7 +265,7 @@ export function PopupCard() {
         />
         <button onClick={addProfile} style={s.btnPrimary}>Add Profile</button>
       </div>
-    </Card>
+    </>
   );
 }
 
@@ -232,7 +303,12 @@ function RuleEditor({
   };
 
   return (
-    <Card title={state.isNew ? 'Add Rule' : 'Edit Rule'}>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <button onClick={onCancel} style={s.backBtn}>← Back</button>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{state.isNew ? 'Add Rule' : 'Edit Rule'}</span>
+      </div>
+
       <div style={s.section}>
         <label style={s.label}>URL Pattern</label>
         <input
@@ -294,6 +370,6 @@ function RuleEditor({
         <button onClick={onCancel} style={s.btn}>Cancel</button>
         <button onClick={onSave} style={s.btnPrimary}>Save</button>
       </div>
-    </Card>
+    </div>
   );
 }

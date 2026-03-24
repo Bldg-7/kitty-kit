@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Card } from '@/components/Card';
 import { useStorage } from '@/hooks/useStorage';
 import * as store from './storage';
 import { browser } from 'wxt/browser';
@@ -31,7 +30,7 @@ export function PopupCard() {
   };
 
   return (
-    <Card title="Tracking Cleaner">
+    <>
       <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
         Cleaned: <strong>{cleanCount ?? 0}</strong> tracking params
       </p>
@@ -50,6 +49,6 @@ export function PopupCard() {
           {isExcluded ? `Remove ${currentHost} from exclusions` : `Exclude ${currentHost}`}
         </button>
       )}
-    </Card>
+    </>
   );
 }

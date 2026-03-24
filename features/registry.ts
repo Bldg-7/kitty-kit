@@ -4,7 +4,7 @@ import { historyCleaner } from './history-cleaner';
 import { headerModifier } from './header-modifier';
 
 export const modules: FeatureModule[] = [
+  headerModifier,
   trackingCleaner,
   historyCleaner,
-  headerModifier,
 ];

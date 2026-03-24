@@ -1,4 +1,3 @@
-import { Card } from '@/components/Card';
 import { useStorage } from '@/hooks/useStorage';
 import { browser } from 'wxt/browser';
 import * as store from './storage';
@@ -16,7 +15,7 @@ export function PopupCard() {
     : 'Never';
 
   return (
-    <Card title="History Cleaner">
+    <>
       <p style={{ margin: '0 0 4px', fontSize: 13, color: '#6b7280' }}>
         Last run: {lastRunText}
       </p>
@@ -36,6 +35,6 @@ export function PopupCard() {
       >
         Run Now
       </button>
-    </Card>
+    </>
   );
 }
