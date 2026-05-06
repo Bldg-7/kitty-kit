@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import * as store from './storage';
-import type { Profile, Rule, HeaderAction } from './types';
+import type { Profile, Rule, HeaderAction, UrlMatchType } from './types';
 
 const RULE_ID_START = 1000;
 
@@ -25,6 +25,54 @@ function toResourceType(t: string): string {
     other: 'other',
   };
   return map[t] ?? t;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isMatchAllPattern(pattern: string): boolean {
+  return !pattern || pattern === '<all_urls>';
+}
+
+function getUrlMatchType(rule: Rule): UrlMatchType {
+  return rule.urlMatchType ?? 'wildcard';
+}
+
+function buildDnrUrlCondition(rule: Rule): Record<string, string> {
+  if (isMatchAllPattern(rule.urlPattern)) return {};
+  switch (getUrlMatchType(rule)) {
+    case 'equals':
+      return { regexFilter: '^' + escapeRegex(rule.urlPattern) + '$' };
+    case 'contains':
+      return { regexFilter: escapeRegex(rule.urlPattern) };
+    case 'wildcard':
+      return { urlFilter: rule.urlPattern };
+    case 'regex':
+      return { regexFilter: rule.urlPattern };
+  }
+}
+
+function buildUrlMatcher(rule: Rule): (url: string) => boolean {
+  if (isMatchAllPattern(rule.urlPattern)) return () => true;
+  switch (getUrlMatchType(rule)) {
+    case 'equals':
+      return (url) => url === rule.urlPattern;
+    case 'contains':
+      return (url) => url.includes(rule.urlPattern);
+    case 'wildcard': {
+      const re = new RegExp('^' + escapeRegex(rule.urlPattern).replace(/\\\*/g, '.*') + '$');
+      return (url) => re.test(url);
+    }
+    case 'regex': {
+      try {
+        const re = new RegExp(rule.urlPattern);
+        return (url) => re.test(url);
+      } catch {
+        return () => false;
+      }
+    }
+  }
 }
 
 function headerActionToDNR(action: HeaderAction) {
@@ -64,9 +112,7 @@ async function applyDeclarativeNetRequestRules() {
         ...(responseHeaders.length > 0 ? { responseHeaders } : {}),
       },
       condition: {
-        ...(rule.urlPattern && rule.urlPattern !== '<all_urls>'
-          ? { urlFilter: rule.urlPattern }
-          : {}),
+        ...buildDnrUrlCondition(rule),
         ...(rule.resourceTypes && rule.resourceTypes.length > 0
           ? { resourceTypes: rule.resourceTypes.map(toResourceType) }
           : { resourceTypes: ['main_frame'] }),
@@ -82,11 +128,19 @@ async function applyDeclarativeNetRequestRules() {
   });
 }
 
-let _cachedRules: Rule[] = [];
+type CompiledRule = {
+  rule: Rule;
+  matches: (url: string) => boolean;
+};
+
+let _cachedRules: CompiledRule[] = [];
 
 async function refreshRuleCache() {
   const allProfiles = await store.profiles.getValue();
-  _cachedRules = getActiveRules(allProfiles);
+  _cachedRules = getActiveRules(allProfiles).map((rule) => ({
+    rule,
+    matches: buildUrlMatcher(rule),
+  }));
 }
 
 function applyHeaderAction(
@@ -114,10 +168,8 @@ function requestHeaderListener(
 ): Browser.webRequest.BlockingResponse | undefined {
   let headers = details.requestHeaders ?? [];
 
-  for (const rule of _cachedRules) {
-    if (rule.urlPattern && rule.urlPattern !== '<all_urls>') {
-      if (!details.url.includes(rule.urlPattern.replace(/\*/g, ''))) continue;
-    }
+  for (const { rule, matches } of _cachedRules) {
+    if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
       if (action.direction !== 'request') continue;
@@ -133,10 +185,8 @@ function responseHeaderListener(
 ): Browser.webRequest.BlockingResponse | undefined {
   let headers = details.responseHeaders ?? [];
 
-  for (const rule of _cachedRules) {
-    if (rule.urlPattern && rule.urlPattern !== '<all_urls>') {
-      if (!details.url.includes(rule.urlPattern.replace(/\*/g, ''))) continue;
-    }
+  for (const { rule, matches } of _cachedRules) {
+    if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
       if (action.direction !== 'response') continue;

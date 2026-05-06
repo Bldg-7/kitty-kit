@@ -1,5 +1,6 @@
 export type HeaderOperation = 'set' | 'remove' | 'append';
 export type HeaderDirection = 'request' | 'response';
+export type UrlMatchType = 'equals' | 'contains' | 'wildcard' | 'regex';
 
 export interface HeaderAction {
   operation: HeaderOperation;
@@ -12,6 +13,7 @@ export interface Rule {
   id: string;
   enabled: boolean;
   urlPattern: string;
+  urlMatchType?: UrlMatchType;
   methods?: string[];
   resourceTypes?: string[];
   headers: HeaderAction[];

@@ -4,7 +4,7 @@ import { useStorage } from '@/hooks/useStorage';
 import { browser } from 'wxt/browser';
 import * as store from './storage';
 import { presets } from './presets';
-import type { Profile, Rule, HeaderAction, HeaderOperation, HeaderDirection } from './types';
+import type { Profile, Rule, HeaderAction, HeaderOperation, HeaderDirection, UrlMatchType } from './types';
 
 const STANDARD_HEADERS = [
   'Accept', 'Accept-Encoding', 'Accept-Language', 'Access-Control-Allow-Credentials',
@@ -39,6 +39,15 @@ const s = {
 };
 
 type View = 'list' | 'detail' | 'edit-rule';
+
+function urlPatternPlaceholder(type: UrlMatchType): string {
+  switch (type) {
+    case 'equals': return 'https://example.com/path';
+    case 'contains': return 'example.com';
+    case 'wildcard': return '*://example.com/*';
+    case 'regex': return '^https://[^/]*\\.example\\.com/.*';
+  }
+}
 
 interface EditState {
   profileId: string;
@@ -114,6 +123,7 @@ export function PopupCard() {
           id: `rule-${Date.now()}`,
           enabled: true,
           urlPattern,
+          urlMatchType: 'wildcard',
           headers: [{ operation: 'set', header: '', value: '', direction: 'request' }],
         },
       });
@@ -303,12 +313,27 @@ function RuleEditor({
 
       <div style={s.section}>
         <label style={s.label}>URL Pattern</label>
-        <input
-          value={rule.urlPattern}
-          onChange={(e) => update({ urlPattern: e.target.value })}
-          style={s.input}
-          placeholder="<all_urls> or *://example.com/*"
-        />
+        <div style={{ display: 'flex', gap: 4 }}>
+          <select
+            value={rule.urlMatchType ?? 'wildcard'}
+            onChange={(e) => update({ urlMatchType: e.target.value as UrlMatchType })}
+            style={{ ...s.select, width: 100 }}
+          >
+            <option value="wildcard">Wildcard</option>
+            <option value="equals">Equals</option>
+            <option value="contains">Contains</option>
+            <option value="regex">Regex</option>
+          </select>
+          <input
+            value={rule.urlPattern}
+            onChange={(e) => update({ urlPattern: e.target.value })}
+            style={{ ...s.input, flex: 1 }}
+            placeholder={urlPatternPlaceholder(rule.urlMatchType ?? 'wildcard')}
+          />
+        </div>
+        <div style={{ ...s.label, marginTop: 4 }}>
+          Use <code>&lt;all_urls&gt;</code> to match every request.
+        </div>
       </div>
 
       <div style={s.section}>
