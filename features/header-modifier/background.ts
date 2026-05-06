@@ -197,57 +197,59 @@ function responseHeaderListener(
   return { responseHeaders: headers };
 }
 
-function applyWebRequestRules() {
-  refreshRuleCache();
+function registerWebRequestListeners() {
   const filter = { urls: ['<all_urls>'] };
 
+  if (!browser.webRequest.onBeforeSendHeaders.hasListener(requestHeaderListener)) {
+    browser.webRequest.onBeforeSendHeaders.addListener(
+      requestHeaderListener,
+      filter,
+      ['blocking', 'requestHeaders'],
+    );
+  }
+  if (!browser.webRequest.onHeadersReceived.hasListener(responseHeaderListener)) {
+    browser.webRequest.onHeadersReceived.addListener(
+      responseHeaderListener,
+      filter,
+      ['blocking', 'responseHeaders'],
+    );
+  }
+}
+
+function unregisterWebRequestListeners() {
   if (browser.webRequest?.onBeforeSendHeaders?.hasListener(requestHeaderListener)) {
     browser.webRequest.onBeforeSendHeaders.removeListener(requestHeaderListener);
   }
   if (browser.webRequest?.onHeadersReceived?.hasListener(responseHeaderListener)) {
     browser.webRequest.onHeadersReceived.removeListener(responseHeaderListener);
   }
-
-  browser.webRequest?.onBeforeSendHeaders?.addListener(
-    requestHeaderListener,
-    filter,
-    ['blocking', 'requestHeaders'],
-  );
-  browser.webRequest?.onHeadersReceived?.addListener(
-    responseHeaderListener,
-    filter,
-    ['blocking', 'responseHeaders'],
-  );
 }
 
 export async function enable() {
-  const isChrome = typeof browser.declarativeNetRequest?.updateDynamicRules === 'function';
-
-  if (isChrome) {
+  if (import.meta.env.FIREFOX) {
+    await refreshRuleCache();
+    registerWebRequestListeners();
+    store.profiles.watch(() => { refreshRuleCache(); });
+  } else {
     await applyDeclarativeNetRequestRules();
     store.profiles.watch(() => applyDeclarativeNetRequestRules());
-  } else {
-    applyWebRequestRules();
-    store.profiles.watch(() => { refreshRuleCache(); applyWebRequestRules(); });
   }
 }
 
 export async function disable() {
-  const existingRules = await browser.declarativeNetRequest?.getDynamicRules?.();
-  if (existingRules) {
-    const removeRuleIds = existingRules
-      .filter((r) => r.id >= RULE_ID_START)
-      .map((r) => r.id);
+  if (import.meta.env.FIREFOX) {
+    unregisterWebRequestListeners();
+    return;
+  }
+
+  const existingRules = await browser.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existingRules
+    .filter((r) => r.id >= RULE_ID_START)
+    .map((r) => r.id);
+  if (removeRuleIds.length > 0) {
     await browser.declarativeNetRequest.updateDynamicRules({
       removeRuleIds,
       addRules: [],
     });
-  }
-
-  if (browser.webRequest?.onBeforeSendHeaders?.hasListener(requestHeaderListener)) {
-    browser.webRequest.onBeforeSendHeaders.removeListener(requestHeaderListener);
-  }
-  if (browser.webRequest?.onHeadersReceived?.hasListener(responseHeaderListener)) {
-    browser.webRequest.onHeadersReceived.removeListener(responseHeaderListener);
   }
 }

@@ -95,49 +95,52 @@ async function refreshCache() {
   _cachedExcluded = await getExcludedDomains();
 }
 
-function applyWebRequestRules() {
-  refreshCache();
+function registerWebRequestListener() {
   const filterUrls = { urls: ['<all_urls>'] };
+  if (!browser.webRequest.onBeforeRequest.hasListener(webRequestListener)) {
+    browser.webRequest.onBeforeRequest.addListener(
+      webRequestListener,
+      filterUrls,
+      ['blocking'],
+    );
+  }
+}
 
+function unregisterWebRequestListener() {
   if (browser.webRequest?.onBeforeRequest?.hasListener(webRequestListener)) {
     browser.webRequest.onBeforeRequest.removeListener(webRequestListener);
   }
-  browser.webRequest?.onBeforeRequest?.addListener(
-    webRequestListener,
-    filterUrls,
-    ['blocking'],
-  );
 }
 
 export async function enable() {
-  const isChrome = typeof browser.declarativeNetRequest?.updateDynamicRules === 'function';
-
-  if (isChrome) {
+  if (import.meta.env.FIREFOX) {
+    await refreshCache();
+    registerWebRequestListener();
+    store.categoryStates.watch(() => { refreshCache(); });
+    store.customParams.watch(() => { refreshCache(); });
+    store.excludedDomains.watch(() => { refreshCache(); });
+  } else {
     await applyDeclarativeNetRequestRules();
     store.categoryStates.watch(() => applyDeclarativeNetRequestRules());
     store.customParams.watch(() => applyDeclarativeNetRequestRules());
     store.excludedDomains.watch(() => applyDeclarativeNetRequestRules());
-  } else {
-    applyWebRequestRules();
-    store.categoryStates.watch(() => { refreshCache(); applyWebRequestRules(); });
-    store.customParams.watch(() => { refreshCache(); applyWebRequestRules(); });
-    store.excludedDomains.watch(() => { refreshCache(); applyWebRequestRules(); });
   }
 }
 
 export async function disable() {
-  const existingRules = await browser.declarativeNetRequest?.getDynamicRules?.();
-  if (existingRules) {
-    const removeRuleIds = existingRules
-      .filter((r) => r.id >= RULE_ID_START && r.id <= RULE_ID_MAX)
-      .map((r) => r.id);
+  if (import.meta.env.FIREFOX) {
+    unregisterWebRequestListener();
+    return;
+  }
+
+  const existingRules = await browser.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existingRules
+    .filter((r) => r.id >= RULE_ID_START && r.id <= RULE_ID_MAX)
+    .map((r) => r.id);
+  if (removeRuleIds.length > 0) {
     await browser.declarativeNetRequest.updateDynamicRules({
       removeRuleIds,
       addRules: [],
     });
-  }
-
-  if (browser.webRequest?.onBeforeRequest?.hasListener(webRequestListener)) {
-    browser.webRequest.onBeforeRequest.removeListener(webRequestListener);
   }
 }
