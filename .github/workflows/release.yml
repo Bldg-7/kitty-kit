@@ -2,17 +2,23 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [master]
 
 permissions:
   contents: write
+  pull-requests: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  build-and-release:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -27,29 +33,54 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Build Chrome
+      - id: changesets
+        uses: changesets/action@v1
+        with:
+          version: npm run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine release
+        id: release
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; nothing to release."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Chrome zip
+        if: steps.release.outputs.needed == 'true'
         run: npm run zip
 
-      - name: Build Firefox
+      - name: Build Firefox zip
+        if: steps.release.outputs.needed == 'true'
         run: npm run zip:firefox
 
-      - name: Prepare release assets
+      - name: Stage release assets
+        if: steps.release.outputs.needed == 'true'
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          mv .output/kitty-kit-${VERSION}-chrome.zip ./kitty-kit-${VERSION}-chrome.zip
-          mv .output/kitty-kit-${VERSION}-firefox.zip ./kitty-kit-${VERSION}-firefox.zip
-          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          mv .output/kitty-kit-${{ steps.release.outputs.version }}-chrome.zip ./kitty-kit-${{ steps.release.outputs.version }}-chrome.zip
+          mv .output/kitty-kit-${{ steps.release.outputs.version }}-firefox.zip ./kitty-kit-${{ steps.release.outputs.version }}-firefox.zip
 
-      - name: Create Release
+      - name: Create GitHub Release
+        if: steps.release.outputs.needed == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release.outputs.tag }}
           generate_release_notes: true
           files: |
-            kitty-kit-${{ env.VERSION }}-chrome.zip
-            kitty-kit-${{ env.VERSION }}-firefox.zip
+            kitty-kit-${{ steps.release.outputs.version }}-chrome.zip
+            kitty-kit-${{ steps.release.outputs.version }}-firefox.zip
           body: |
             ## Install
 
-            **Chrome**: Download `kitty-kit-${{ env.VERSION }}-chrome.zip`, unzip, then load via `chrome://extensions` → Developer mode → "Load unpacked".
+            **Chrome**: Download `kitty-kit-${{ steps.release.outputs.version }}-chrome.zip`, unzip, then load via `chrome://extensions` → Developer mode → "Load unpacked".
 
-            **Firefox**: Download `kitty-kit-${{ env.VERSION }}-firefox.zip`, then drag & drop onto Firefox, or submit to AMO for signing.
+            **Firefox**: Download `kitty-kit-${{ steps.release.outputs.version }}-firefox.zip`, then drag & drop onto Firefox, or submit to AMO for signing.
