@@ -74,10 +74,16 @@ export function App() {
     browser.runtime.openOptionsPage();
   };
 
-  const currentModule = active.find((m) => m.id === activeTab);
-
   // Filter tabs to only show enabled modules
   const enabledTabs = tabs.filter((t) => enabled?.[t.id]);
+
+  // Fall back to the first enabled tab when the current one isn't enabled, so
+  // the body never renders blank just because the hard-coded default tab is off.
+  const effectiveTab = enabledTabs.some((t) => t.id === activeTab)
+    ? activeTab
+    : enabledTabs[0]?.id;
+
+  const currentModule = active.find((m) => m.id === effectiveTab);
 
   return (
     <div style={s.container}>
@@ -111,7 +117,7 @@ export function App() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                style={s.tab(activeTab === t.id)}
+                style={s.tab(effectiveTab === t.id)}
               >
                 {t.label}
               </button>

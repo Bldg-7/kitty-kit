@@ -112,22 +112,35 @@ function unregisterWebRequestListener() {
   }
 }
 
+let _unwatches: Array<() => void> = [];
+
 export async function enable() {
   if (import.meta.env.FIREFOX) {
     await refreshCache();
     registerWebRequestListener();
-    store.categoryStates.watch(() => { refreshCache(); });
-    store.customParams.watch(() => { refreshCache(); });
-    store.excludedDomains.watch(() => { refreshCache(); });
+    if (_unwatches.length === 0) {
+      _unwatches = [
+        store.categoryStates.watch(() => { refreshCache(); }),
+        store.customParams.watch(() => { refreshCache(); }),
+        store.excludedDomains.watch(() => { refreshCache(); }),
+      ];
+    }
   } else {
     await applyDeclarativeNetRequestRules();
-    store.categoryStates.watch(() => applyDeclarativeNetRequestRules());
-    store.customParams.watch(() => applyDeclarativeNetRequestRules());
-    store.excludedDomains.watch(() => applyDeclarativeNetRequestRules());
+    if (_unwatches.length === 0) {
+      _unwatches = [
+        store.categoryStates.watch(() => { applyDeclarativeNetRequestRules(); }),
+        store.customParams.watch(() => { applyDeclarativeNetRequestRules(); }),
+        store.excludedDomains.watch(() => { applyDeclarativeNetRequestRules(); }),
+      ];
+    }
   }
 }
 
 export async function disable() {
+  _unwatches.forEach((unwatch) => unwatch());
+  _unwatches = [];
+
   if (import.meta.env.FIREFOX) {
     unregisterWebRequestListener();
     return;

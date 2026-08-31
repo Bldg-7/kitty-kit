@@ -10,7 +10,6 @@ export default defineConfig({
         'storage',
         'history',
         'alarms',
-        'declarativeNetRequest',
         'tabs',
         'activeTab',
       ],
@@ -42,6 +41,7 @@ export default defineConfig({
       ...common,
       permissions: [
         ...common.permissions,
+        'declarativeNetRequest',
         'declarativeNetRequestFeedback',
       ],
     };
