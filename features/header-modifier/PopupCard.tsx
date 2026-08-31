@@ -298,9 +298,9 @@ function RuleEditor({
   };
 
   const updateHeader = (index: number, partial: Partial<HeaderAction>) => {
-    const headers = [...rule.headers];
-    headers[index] = { ...headers[index], ...partial };
-    update({ headers });
+    update({
+      headers: rule.headers.map((h, i) => (i === index ? { ...h, ...partial } : h)),
+    });
   };
 
   const addHeader = () => {
