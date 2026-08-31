@@ -95,32 +95,43 @@ async function applyDeclarativeNetRequestRules() {
     .filter((r) => r.id >= RULE_ID_START)
     .map((r) => r.id);
 
-  const addRules = rules.map((rule, i) => {
-    const requestHeaders = rule.headers
-      .filter((h) => h.direction === 'request')
-      .map(headerActionToDNR);
-    const responseHeaders = rule.headers
-      .filter((h) => h.direction === 'response')
-      .map(headerActionToDNR);
+  const addRules = rules
+    .map((rule, i) => {
+      const requestHeaders = rule.headers
+        .filter((h) => h.direction === 'request' && h.header.trim() !== '')
+        .map(headerActionToDNR);
+      const responseHeaders = rule.headers
+        .filter((h) => h.direction === 'response' && h.header.trim() !== '')
+        .map(headerActionToDNR);
 
-    const dnrRule: any = {
-      id: RULE_ID_START + i,
-      priority: 1,
-      action: {
-        type: 'modifyHeaders',
-        ...(requestHeaders.length > 0 ? { requestHeaders } : {}),
-        ...(responseHeaders.length > 0 ? { responseHeaders } : {}),
-      },
-      condition: {
-        ...buildDnrUrlCondition(rule),
-        ...(rule.resourceTypes && rule.resourceTypes.length > 0
-          ? { resourceTypes: rule.resourceTypes.map(toResourceType) }
-          : { resourceTypes: ['main_frame'] }),
-      },
-    };
+      // modifyHeaders requires at least one request or response header. A rule
+      // whose header names are all blank would otherwise emit an invalid rule
+      // and make updateDynamicRules reject the ENTIRE batch — silently
+      // disabling every rule (and, without per-module isolation, later modules
+      // too). Drop such rules instead.
+      if (requestHeaders.length === 0 && responseHeaders.length === 0) {
+        return null;
+      }
 
-    return dnrRule;
-  });
+      const dnrRule: any = {
+        id: RULE_ID_START + i,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          ...(requestHeaders.length > 0 ? { requestHeaders } : {}),
+          ...(responseHeaders.length > 0 ? { responseHeaders } : {}),
+        },
+        condition: {
+          ...buildDnrUrlCondition(rule),
+          ...(rule.resourceTypes && rule.resourceTypes.length > 0
+            ? { resourceTypes: rule.resourceTypes.map(toResourceType) }
+            : { resourceTypes: ['main_frame'] }),
+        },
+      };
+
+      return dnrRule;
+    })
+    .filter((r) => r !== null);
 
   await browser.declarativeNetRequest.updateDynamicRules({
     removeRuleIds,
@@ -167,34 +178,42 @@ function requestHeaderListener(
   details: Browser.webRequest.OnBeforeSendHeadersDetails,
 ): Browser.webRequest.BlockingResponse | undefined {
   let headers = details.requestHeaders ?? [];
+  let modified = false;
 
   for (const { rule, matches } of _cachedRules) {
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
       if (action.direction !== 'request') continue;
+      if (action.header.trim() === '') continue;
       headers = applyHeaderAction(headers as any[], action) as any;
+      modified = true;
     }
   }
 
-  return { requestHeaders: headers };
+  // Don't flag every request as header-modified when nothing matched — return
+  // undefined so non-matching requests pass through untouched.
+  return modified ? { requestHeaders: headers } : undefined;
 }
 
 function responseHeaderListener(
   details: Browser.webRequest.OnHeadersReceivedDetails,
 ): Browser.webRequest.BlockingResponse | undefined {
   let headers = details.responseHeaders ?? [];
+  let modified = false;
 
   for (const { rule, matches } of _cachedRules) {
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
       if (action.direction !== 'response') continue;
+      if (action.header.trim() === '') continue;
       headers = applyHeaderAction(headers as any[], action) as any;
+      modified = true;
     }
   }
 
-  return { responseHeaders: headers };
+  return modified ? { responseHeaders: headers } : undefined;
 }
 
 function registerWebRequestListeners() {
@@ -225,18 +244,23 @@ function unregisterWebRequestListeners() {
   }
 }
 
+let _unwatchProfiles: (() => void) | null = null;
+
 export async function enable() {
   if (import.meta.env.FIREFOX) {
     await refreshRuleCache();
     registerWebRequestListeners();
-    store.profiles.watch(() => { refreshRuleCache(); });
+    _unwatchProfiles ??= store.profiles.watch(() => { refreshRuleCache(); });
   } else {
     await applyDeclarativeNetRequestRules();
-    store.profiles.watch(() => applyDeclarativeNetRequestRules());
+    _unwatchProfiles ??= store.profiles.watch(() => { applyDeclarativeNetRequestRules(); });
   }
 }
 
 export async function disable() {
+  _unwatchProfiles?.();
+  _unwatchProfiles = null;
+
   if (import.meta.env.FIREFOX) {
     unregisterWebRequestListeners();
     return;

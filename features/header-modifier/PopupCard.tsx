@@ -149,7 +149,15 @@ export function PopupCard() {
 
   const saveRule = async () => {
     if (!editState) return;
-    const { profileId, rule, isNew } = editState;
+    const { profileId, isNew } = editState;
+    // Normalize header names and drop actions left with a blank name, so a rule
+    // can never be saved as a silent no-op (an enabled rule that changes nothing).
+    const rule = {
+      ...editState.rule,
+      headers: editState.rule.headers
+        .map((h) => ({ ...h, header: h.header.trim() }))
+        .filter((h) => h.header !== ''),
+    };
     await save(profiles.map((p) => {
       if (p.id !== profileId) return p;
       if (isNew) return { ...p, rules: [...p.rules, rule] };
@@ -283,6 +291,7 @@ function RuleEditor({
   onCancel: () => void;
 }) {
   const { rule } = state;
+  const hasValidHeader = rule.headers.some((h) => h.header.trim() !== '');
 
   const update = (partial: Partial<Rule>) => {
     setState({ ...state, rule: { ...rule, ...partial } });
@@ -383,9 +392,20 @@ function RuleEditor({
         <button onClick={addHeader} style={s.btn}>+ Header</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {!hasValidHeader && (
+          <span style={{ fontSize: 11, color: '#ef4444', marginRight: 'auto' }}>
+            Add a header name to save.
+          </span>
+        )}
         <button onClick={onCancel} style={s.btn}>Cancel</button>
-        <button onClick={onSave} style={s.btnPrimary}>Save</button>
+        <button
+          onClick={onSave}
+          disabled={!hasValidHeader}
+          style={{ ...s.btnPrimary, opacity: hasValidHeader ? 1 : 0.5, cursor: hasValidHeader ? 'pointer' : 'not-allowed' }}
+        >
+          Save
+        </button>
       </div>
     </div>
   );

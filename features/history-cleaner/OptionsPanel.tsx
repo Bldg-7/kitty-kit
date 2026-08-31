@@ -52,16 +52,22 @@ export function OptionsPanel() {
   return (
     <div>
       <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Retention Period</h4>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 4 }}>
         <input
           type="number"
-          min={1}
+          min={0}
           value={days ?? 30}
-          onChange={(e) => setDays(parseInt(e.target.value, 10) || 30)}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10);
+            setDays(Number.isNaN(n) ? 30 : Math.max(0, n));
+          }}
           style={{ ...inputStyle, width: 60 }}
         />
         <span style={{ fontSize: 13, color: '#6b7280' }}> days</span>
       </div>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: '#9ca3af' }}>
+        History older than this is removed on each run. Set to <strong>0</strong> to clear all history.
+      </p>
 
       <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Domain Whitelist</h4>
       <p style={{ margin: '0 0 8px', fontSize: 12, color: '#9ca3af' }}>

@@ -17,14 +17,14 @@
   },
   "dependencies": {
     "@wxt-dev/module-react": "^1.2.2",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "wxt": "^0.20.20"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "wxt": "^0.21.4"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "typescript": "^5.9.3"
   }
 }
