@@ -15,6 +15,14 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      # Firefox AMO auto-submit credentials. Set these as repository secrets to
+      # enable automatic publishing; when they are absent the submit step below
+      # is skipped and the GitHub Release still runs.
+      # Create an API key at https://addons.mozilla.org/en-US/developers/addon/api/key/
+      FIREFOX_EXTENSION_ID: settimeout1000@gmail.com
+      FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+      FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +71,18 @@ jobs:
         if: steps.release.outputs.needed == 'true'
         run: npm run zip:firefox
 
+      - name: Submit to Firefox Add-ons (AMO)
+        # Only when a new version is being released AND the AMO secrets are set.
+        # Uploads the extension zip plus the sources zip AMO requires for
+        # build-tool extensions, and submits the version for review (listed).
+        # The add-on's listing must already exist on AMO (create it once in the
+        # Developer Hub); this step publishes subsequent versions automatically.
+        if: steps.release.outputs.needed == 'true' && env.FIREFOX_JWT_ISSUER != ''
+        run: |
+          npx wxt submit \
+            --firefox-zip ".output/kitty-kit-${{ steps.release.outputs.version }}-firefox.zip" \
+            --firefox-sources-zip ".output/kitty-kit-${{ steps.release.outputs.version }}-sources.zip"
+
       - name: Stage release assets
         if: steps.release.outputs.needed == 'true'
         run: |
@@ -83,4 +103,4 @@ jobs:
 
             **Chrome**: Download `kitty-kit-${{ steps.release.outputs.version }}-chrome.zip`, unzip, then load via `chrome://extensions` → Developer mode → "Load unpacked".
 
-            **Firefox**: Download `kitty-kit-${{ steps.release.outputs.version }}-firefox.zip`, then drag & drop onto Firefox, or submit to AMO for signing.
+            **Firefox**: Auto-submitted to [AMO](https://addons.mozilla.org/) for review when store credentials are configured. To sideload manually, download `kitty-kit-${{ steps.release.outputs.version }}-firefox.zip`.
