@@ -40,6 +40,8 @@ export function PopupCard() {
           Last run: found {stats.found} older than {new Date(stats.cutoff).toLocaleString()}
           {stats.mode === 'deleteUrl' && ` · whitelisted ${stats.skipped} · failed ${stats.failed}`}
           {stats.firstFailure && ` · first failure: ${stats.firstFailure}`}
+          {' · '}history API sees {stats.visible} entries
+          {stats.oldestVisit !== null && `, oldest visit ${new Date(stats.oldestVisit).toLocaleString()}`}
         </p>
       )}
       {lastError && (

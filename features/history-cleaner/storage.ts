@@ -52,6 +52,10 @@ export interface RunStats {
   mode: 'deleteRange' | 'deleteUrl';
   /** The cutoff timestamp (ms) the run used. */
   cutoff: number;
+  /** How many entries a cutoff-free search returned (capped), to tell "API sees nothing" from "nothing is old enough". */
+  visible: number;
+  /** Oldest lastVisitTime (ms) among those, or null when none. */
+  oldestVisit: number | null;
 }
 
 export const lastStats = storage.defineItem<RunStats | null>(

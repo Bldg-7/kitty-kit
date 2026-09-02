@@ -41,11 +41,27 @@ async function searchOlderThan(cutoff: number) {
  * - With a whitelist, entries must be inspected individually, so the search +
  *   `deleteUrl` sweep is repeated until a pass finds nothing left to delete.
  */
+/**
+ * A cutoff-free look at what the history API exposes at all, so a run that
+ * finds nothing can be told apart from history the API does not see.
+ */
+async function sampleVisible(): Promise<Pick<store.RunStats, 'visible' | 'oldestVisit'>> {
+  const all = await browser.history.search({ text: '', startTime: 0, maxResults: PAGE_SIZE });
+  let oldestVisit: number | null = null;
+  for (const item of all) {
+    if (typeof item.lastVisitTime === 'number' && (oldestVisit === null || item.lastVisitTime < oldestVisit)) {
+      oldestVisit = item.lastVisitTime;
+    }
+  }
+  return { visible: all.length, oldestVisit };
+}
+
 async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunStats> {
+  const sample = await sampleVisible();
   if (wl.length === 0) {
     const found = await searchOlderThan(cutoff);
     const stats: store.RunStats = {
-      found: found.length, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteRange', cutoff,
+      found: found.length, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteRange', cutoff, ...sample,
     };
     await store.lastDeleteCountCapped.setValue(false);
     if (found.length === 0) return stats;
@@ -58,7 +74,7 @@ async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunS
 
   await store.lastDeleteCountCapped.setValue(false);
   const stats: store.RunStats = {
-    found: 0, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteUrl', cutoff,
+    found: 0, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteUrl', cutoff, ...sample,
   };
   // Loop while a pass still makes progress. A pass that deletes nothing means
   // everything left in range is whitelisted (or undeletable), so stop.
