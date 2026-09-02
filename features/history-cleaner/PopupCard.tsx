@@ -8,6 +8,7 @@ export function PopupCard() {
   const [countCapped] = useStorage(store.lastDeleteCountCapped);
   const [running] = useStorage(store.running);
   const [lastError] = useStorage(store.lastError);
+  const [days] = useStorage(store.retentionDays);
 
   const handleRunNow = () => {
     browser.runtime.sendMessage({ type: 'history-cleaner:run-now' });
@@ -17,8 +18,16 @@ export function PopupCard() {
     ? new Date(lastRunTs).toLocaleString()
     : 'Never';
 
+  const effectiveDays = days ?? 30;
+  const scopeText = effectiveDays === 0
+    ? 'Deletes all history'
+    : `Deletes visits before ${new Date(Date.now() - effectiveDays * 24 * 60 * 60 * 1000).toLocaleDateString()} (${effectiveDays} days)`;
+
   return (
     <>
+      <p style={{ margin: '0 0 4px', fontSize: 13, color: '#6b7280' }}>
+        {scopeText}
+      </p>
       <p style={{ margin: '0 0 4px', fontSize: 13, color: '#6b7280' }}>
         Last run: {lastRunText}
       </p>
