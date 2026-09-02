@@ -41,42 +41,50 @@ async function searchOlderThan(cutoff: number) {
  * - With a whitelist, entries must be inspected individually, so the search +
  *   `deleteUrl` sweep is repeated until a pass finds nothing left to delete.
  */
-async function deleteOlderThan(cutoff: number, wl: string[]): Promise<number> {
+async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunStats> {
   if (wl.length === 0) {
     const found = await searchOlderThan(cutoff);
-    if (found.length === 0) {
-      await store.lastDeleteCountCapped.setValue(false);
-      return 0;
-    }
+    const stats: store.RunStats = {
+      found: found.length, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteRange', cutoff,
+    };
+    await store.lastDeleteCountCapped.setValue(false);
+    if (found.length === 0) return stats;
     await browser.history.deleteRange({ startTime: 0, endTime: cutoff });
     // deleteRange itself has no cap, but the count comes from the capped
     // search, so flag it as a lower bound when the search was full.
     await store.lastDeleteCountCapped.setValue(found.length >= PAGE_SIZE);
-    return found.length;
+    return stats;
   }
 
   await store.lastDeleteCountCapped.setValue(false);
-  let deleted = 0;
+  const stats: store.RunStats = {
+    found: 0, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteUrl', cutoff,
+  };
   // Loop while a pass still makes progress. A pass that deletes nothing means
   // everything left in range is whitelisted (or undeletable), so stop.
   for (;;) {
     const results = await searchOlderThan(cutoff);
+    stats.found += results.length;
     let deletedThisPass = 0;
     for (const item of results) {
-      if (!item.url || isWhitelisted(item.url, wl)) continue;
+      if (!item.url || isWhitelisted(item.url, wl)) {
+        stats.skipped++;
+        continue;
+      }
       try {
         await browser.history.deleteUrl({ url: item.url });
         deletedThisPass++;
       } catch (err) {
         // Keep sweeping so a single bad URL can't abort the whole cleanup, but
         // don't hide it: a run that "deletes nothing" is otherwise undebuggable.
+        stats.failed++;
+        stats.firstFailure ??= `${item.url}: ${err instanceof Error ? err.message : String(err)}`;
         console.warn(`[kitty-kit] history-cleaner: failed to delete ${item.url}`, err);
       }
     }
-    deleted += deletedThisPass;
     if (deletedThisPass === 0 || results.length < PAGE_SIZE) break;
   }
-  return deleted;
+  return stats;
 }
 
 let inFlight: Promise<void> | null = null;
@@ -101,9 +109,10 @@ function runCleanup(): Promise<void> {
       const wl = await store.whitelist.getValue();
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-      const deleted = await deleteOlderThan(cutoff, wl);
+      const stats = await deleteOlderThan(cutoff, wl);
 
-      await store.lastDeleteCount.setValue(deleted);
+      await store.lastStats.setValue(stats);
+      await store.lastDeleteCount.setValue(stats.found - stats.skipped - stats.failed);
       await store.lastError.setValue(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

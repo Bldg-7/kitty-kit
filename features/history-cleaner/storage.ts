@@ -37,3 +37,24 @@ export const lastError = storage.defineItem<string | null>(
   'local:historyCleaner:lastError',
   { defaultValue: null },
 );
+
+/** Breakdown of the last run, so a run that "deleted nothing" can be explained. */
+export interface RunStats {
+  /** Entries the history search reported as older than the cutoff. */
+  found: number;
+  /** Entries skipped because their domain is whitelisted. */
+  skipped: number;
+  /** Entries whose deletion threw. */
+  failed: number;
+  /** Message of the first deletion error, if any. */
+  firstFailure: string | null;
+  /** Which deletion strategy ran. */
+  mode: 'deleteRange' | 'deleteUrl';
+  /** The cutoff timestamp (ms) the run used. */
+  cutoff: number;
+}
+
+export const lastStats = storage.defineItem<RunStats | null>(
+  'local:historyCleaner:lastStats',
+  { defaultValue: null },
+);

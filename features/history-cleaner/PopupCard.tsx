@@ -9,6 +9,7 @@ export function PopupCard() {
   const [running] = useStorage(store.running);
   const [lastError] = useStorage(store.lastError);
   const [days] = useStorage(store.retentionDays);
+  const [stats] = useStorage(store.lastStats);
 
   const handleRunNow = () => {
     browser.runtime.sendMessage({ type: 'history-cleaner:run-now' });
@@ -34,6 +35,13 @@ export function PopupCard() {
       <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
         Deleted: <strong>{deleteCount ?? 0}{countCapped ? '+' : ''}</strong> entries
       </p>
+      {stats && (
+        <p style={{ margin: '0 0 8px', fontSize: 11, color: '#9ca3af' }}>
+          Last run: found {stats.found} older than {new Date(stats.cutoff).toLocaleString()}
+          {stats.mode === 'deleteUrl' && ` · whitelisted ${stats.skipped} · failed ${stats.failed}`}
+          {stats.firstFailure && ` · first failure: ${stats.firstFailure}`}
+        </p>
+      )}
       {lastError && (
         <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>
           Last run failed: {lastError}
