@@ -30,21 +30,6 @@ async function searchOlderThan(cutoff: number) {
 }
 
 /**
- * A cutoff-free look at what the history API exposes at all, so a run that
- * finds nothing can be told apart from history the API does not see.
- */
-async function sampleVisible(): Promise<Pick<store.RunStats, 'visible' | 'oldestVisit'>> {
-  const all = await browser.history.search({ text: '', startTime: 0, maxResults: PAGE_SIZE });
-  let oldestVisit: number | null = null;
-  for (const item of all) {
-    if (typeof item.lastVisitTime === 'number' && (oldestVisit === null || item.lastVisitTime < oldestVisit)) {
-      oldestVisit = item.lastVisitTime;
-    }
-  }
-  return { visible: all.length, oldestVisit };
-}
-
-/**
  * Collects every visit time before `cutoff` that belongs to a whitelisted
  * domain. Pages are enumerated both from the generic cutoff search and from a
  * per-domain text search, so a whitelisted domain with more pages than one
@@ -119,34 +104,24 @@ async function deleteVisitsBeforeExcept(cutoff: number, protectedTimes: number[]
  * `history.deleteUrl()` per page: deleteUrl drops *every* visit of the page,
  * including ones after the cutoff, and per-URL deletion is slow in Firefox
  * (~10 ms each) and limited by the search result cap.
+ *
+ * Returns the number of (non-whitelisted) pages that had visits before the
+ * cutoff, as reported by the capped search.
  */
-async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunStats> {
-  const sample = await sampleVisible();
+async function deleteOlderThan(cutoff: number, wl: string[]): Promise<number> {
   const found = await searchOlderThan(cutoff);
   await store.lastDeleteCountCapped.setValue(found.length >= PAGE_SIZE);
-
-  const stats: store.RunStats = {
-    found: found.length,
-    skipped: 0,
-    protectedVisits: 0,
-    rangeCalls: 0,
-    cutoff,
-    ...sample,
-    searchHistoryCleared: false,
-  };
-  if (found.length === 0) return stats;
+  if (found.length === 0) return 0;
 
   if (wl.length === 0) {
     await browser.history.deleteRange({ startTime: 0, endTime: cutoff });
-    stats.rangeCalls = 1;
-    return stats;
+    return found.length;
   }
 
-  stats.skipped = found.filter((item) => item.url && isWhitelisted(item.url, wl)).length;
+  const skipped = found.filter((item) => item.url && isWhitelisted(item.url, wl)).length;
   const protectedTimes = await collectProtectedVisitTimes(cutoff, wl, found);
-  stats.protectedVisits = protectedTimes.length;
-  stats.rangeCalls = await deleteVisitsBeforeExcept(cutoff, protectedTimes);
-  return stats;
+  await deleteVisitsBeforeExcept(cutoff, protectedTimes);
+  return found.length - skipped;
 }
 
 let inFlight: Promise<void> | null = null;
@@ -171,7 +146,7 @@ function runCleanup(): Promise<void> {
       const wl = await store.whitelist.getValue();
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-      const stats = await deleteOlderThan(cutoff, wl);
+      const cleaned = await deleteOlderThan(cutoff, wl);
 
       if (await store.clearSearchHistory.getValue()) {
         // Remembered search terms live in form history, which the extension
@@ -179,11 +154,9 @@ function runCleanup(): Promise<void> {
         // `since` option filters newer-than, not older-than). since: 0 clears
         // all of it in both browsers.
         await browser.browsingData.removeFormData({ since: 0 });
-        stats.searchHistoryCleared = true;
       }
 
-      await store.lastStats.setValue(stats);
-      await store.lastDeleteCount.setValue(stats.found - stats.skipped);
+      await store.lastDeleteCount.setValue(cleaned);
       await store.lastError.setValue(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

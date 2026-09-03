@@ -16,6 +16,10 @@ const s = {
     fontFamily: 'system-ui, sans-serif',
     fontSize: 14,
     minWidth: 360,
+    // Browser popups are clipped at ~800px; cap the width so long text can
+    // never widen the popup past the visible area and cut off the header.
+    maxWidth: 600,
+    overflowWrap: 'anywhere',
   } satisfies CSSProperties,
   header: {
     display: 'flex',

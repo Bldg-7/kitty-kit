@@ -47,28 +47,3 @@ export const lastError = storage.defineItem<string | null>(
   'local:historyCleaner:lastError',
   { defaultValue: null },
 );
-
-/** Breakdown of the last run, so a run that "deleted nothing" can be explained. */
-export interface RunStats {
-  /** Pages the history search reported as having a visit before the cutoff (capped). */
-  found: number;
-  /** Of those, pages on whitelisted domains (their visits were preserved). */
-  skipped: number;
-  /** Whitelisted visit timestamps before the cutoff that were carved out of the deletion. */
-  protectedVisits: number;
-  /** Number of deleteRange calls the run issued. */
-  rangeCalls: number;
-  /** The cutoff timestamp (ms) the run used. */
-  cutoff: number;
-  /** How many pages a cutoff-free search returned (capped), to tell "API sees nothing" from "nothing is old enough". */
-  visible: number;
-  /** Oldest lastVisitTime (ms) among those, or null when none. */
-  oldestVisit: number | null;
-  /** Whether remembered search terms were cleared in this run. */
-  searchHistoryCleared: boolean;
-}
-
-export const lastStats = storage.defineItem<RunStats | null>(
-  'local:historyCleaner:lastStats',
-  { defaultValue: null },
-);

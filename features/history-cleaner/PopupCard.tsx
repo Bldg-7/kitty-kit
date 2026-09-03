@@ -9,7 +9,6 @@ export function PopupCard() {
   const [running] = useStorage(store.running);
   const [lastError] = useStorage(store.lastError);
   const [days] = useStorage(store.retentionDays);
-  const [stats] = useStorage(store.lastStats);
 
   const handleRunNow = () => {
     browser.runtime.sendMessage({ type: 'history-cleaner:run-now' });
@@ -35,17 +34,8 @@ export function PopupCard() {
       <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
         Cleaned: <strong>{deleteCount ?? 0}{countCapped ? '+' : ''}</strong> pages
       </p>
-      {stats && (
-        <p style={{ margin: '0 0 8px', fontSize: 11, color: '#9ca3af' }}>
-          Last run: {stats.found}{countCapped ? '+' : ''} pages had visits before {new Date(stats.cutoff).toLocaleString()}
-          {stats.skipped > 0 && ` · ${stats.skipped} whitelisted (${stats.protectedVisits} visits kept)`}
-          {' · '}history API sees {stats.visible} pages
-          {stats.oldestVisit !== null && `, oldest last visit ${new Date(stats.oldestVisit).toLocaleString()}`}
-          {stats.searchHistoryCleared && ' · search history cleared'}
-        </p>
-      )}
       {lastError && (
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626' }}>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#dc2626', overflowWrap: 'anywhere' }}>
           Last run failed: {lastError}
         </p>
       )}
