@@ -1,5 +1,5 @@
 ---
-"kitty-kit": patch
+"kitty-kit": minor
 ---
 
 History Cleaner: delete *visits* before the cutoff date, not whole pages.
