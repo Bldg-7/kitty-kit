@@ -74,8 +74,28 @@ export function App() {
   const { active, enabled } = useModules();
   const [activeTab, setActiveTab] = useState<TabId>('header-modifier');
 
-  const openOptions = () => {
-    browser.runtime.openOptionsPage();
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  // Open the options page as a regular tab in the current window. Firefox's
+  // runtime.openOptionsPage() for an inline options page only focuses an
+  // existing about:addons tab, which may sit in another window and look like
+  // nothing happened; a tab created here is always visible. Fall back to
+  // openOptionsPage() if tab creation is refused, and surface any error
+  // instead of failing silently.
+  const openOptions = async () => {
+    try {
+      await browser.tabs.create({ url: browser.runtime.getURL('/options.html') });
+      window.close();
+    } catch (err) {
+      try {
+        await browser.runtime.openOptionsPage();
+        window.close();
+      } catch (err2) {
+        const message = err2 instanceof Error ? err2.message : String(err2 ?? err);
+        console.error('[kitty-kit] failed to open options page', err, err2);
+        setOpenError(message);
+      }
+    }
   };
 
   // Filter tabs to only show enabled modules
@@ -95,6 +115,11 @@ export function App() {
         <h2 style={s.title}>Kitty Kit</h2>
         <button onClick={openOptions} style={s.settingsBtn}>Settings</button>
       </div>
+      {openError && (
+        <p style={{ margin: 0, padding: '6px 12px', fontSize: 12, color: '#dc2626', borderBottom: '1px solid #e5e7eb' }}>
+          Could not open settings: {openError}
+        </p>
+      )}
 
       {enabledTabs.length === 0 ? (
         <div style={s.empty}>
