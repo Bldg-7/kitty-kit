@@ -9,6 +9,7 @@ export default defineConfig({
       permissions: [
         'storage',
         'history',
+        'browsingData',
         'alarms',
         'tabs',
         'activeTab',

@@ -41,6 +41,7 @@ export function PopupCard() {
           {stats.skipped > 0 && ` · ${stats.skipped} whitelisted (${stats.protectedVisits} visits kept)`}
           {' · '}history API sees {stats.visible} pages
           {stats.oldestVisit !== null && `, oldest last visit ${new Date(stats.oldestVisit).toLocaleString()}`}
+          {stats.searchHistoryCleared && ' · search history cleared'}
         </p>
       )}
       {lastError && (

@@ -10,6 +10,16 @@ export const whitelist = storage.defineItem<string[]>(
   { defaultValue: [] },
 );
 
+/**
+ * Also wipe remembered search terms (the address bar's "recent searches" and
+ * search box history) on each run. Browsers expose these only through
+ * browsingData, which cannot filter by date, so all of them are removed.
+ */
+export const clearSearchHistory = storage.defineItem<boolean>(
+  'local:historyCleaner:clearSearchHistory',
+  { defaultValue: false },
+);
+
 export const lastRun = storage.defineItem<number | null>(
   'local:historyCleaner:lastRun',
   { defaultValue: null },
@@ -54,6 +64,8 @@ export interface RunStats {
   visible: number;
   /** Oldest lastVisitTime (ms) among those, or null when none. */
   oldestVisit: number | null;
+  /** Whether remembered search terms were cleared in this run. */
+  searchHistoryCleared: boolean;
 }
 
 export const lastStats = storage.defineItem<RunStats | null>(

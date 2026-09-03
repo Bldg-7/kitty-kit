@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useStorage } from '@/hooks/useStorage';
+import { Toggle } from '@/components/Toggle';
 import * as store from './storage';
 
 export function OptionsPanel() {
   const [days, setDays] = useStorage(store.retentionDays);
   const [wl, setWl] = useStorage(store.whitelist);
+  const [clearSearch, setClearSearch] = useStorage(store.clearSearchHistory);
   const [newDomain, setNewDomain] = useState('');
   // What the user is currently typing into the retention field. Kept separate
   // from the stored value so clearing the field to type a new number doesn't
@@ -83,6 +85,19 @@ export function OptionsPanel() {
         {effectiveDays === 0
           ? 'Current setting: every visit up to the moment of each run is deleted.'
           : `Current setting: visits before ${cutoffDate.toLocaleDateString()} are deleted; anything newer is kept.`}
+      </p>
+
+      <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Search History</h4>
+      <div style={{ marginBottom: 4 }}>
+        <Toggle
+          checked={clearSearch === true}
+          onChange={(v) => setClearSearch(v)}
+          label="Also clear remembered search terms on each run"
+        />
+      </div>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: '#9ca3af' }}>
+        Removes the search terms the address bar and search box remember (Firefox shows them as "Recent searches").
+        The browser API cannot filter these by date, so all of them are removed every run.
       </p>
 
       <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Domain Whitelist</h4>

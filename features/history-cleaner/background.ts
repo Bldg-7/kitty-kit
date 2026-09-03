@@ -132,6 +132,7 @@ async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunS
     rangeCalls: 0,
     cutoff,
     ...sample,
+    searchHistoryCleared: false,
   };
   if (found.length === 0) return stats;
 
@@ -171,6 +172,15 @@ function runCleanup(): Promise<void> {
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
       const stats = await deleteOlderThan(cutoff, wl);
+
+      if (await store.clearSearchHistory.getValue()) {
+        // Remembered search terms live in form history, which the extension
+        // APIs only expose through browsingData and only as "everything" (the
+        // `since` option filters newer-than, not older-than). since: 0 clears
+        // all of it in both browsers.
+        await browser.browsingData.removeFormData({ since: 0 });
+        stats.searchHistoryCleared = true;
+      }
 
       await store.lastStats.setValue(stats);
       await store.lastDeleteCount.setValue(stats.found - stats.skipped);
