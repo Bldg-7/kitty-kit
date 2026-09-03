@@ -50,7 +50,9 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((message) => {
     if (message?.type === 'history-cleaner:run-now') {
-      runCleanup();
+      runCleanup().catch(() => {
+        // Recorded in storage (shown in the popup) and the console by runCleanup.
+      });
     }
   });
 });
