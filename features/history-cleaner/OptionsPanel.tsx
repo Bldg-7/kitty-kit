@@ -77,7 +77,7 @@ export function OptionsPanel() {
         <span style={{ fontSize: 13, color: '#6b7280' }}> days</span>
       </div>
       <p style={{ margin: '0 0 4px', fontSize: 12, color: '#9ca3af' }}>
-        History older than this is removed on each run. Set to <strong>0</strong> to clear all history.
+        Visits older than this are removed on each run; later visits to the same pages are kept. Set to <strong>0</strong> to clear all history.
       </p>
       <p style={{ margin: '0 0 16px', fontSize: 12, color: '#6b7280' }}>
         {effectiveDays === 0

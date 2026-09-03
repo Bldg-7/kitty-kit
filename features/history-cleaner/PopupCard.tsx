@@ -33,15 +33,14 @@ export function PopupCard() {
         Last run: {lastRunText}
       </p>
       <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>
-        Deleted: <strong>{deleteCount ?? 0}{countCapped ? '+' : ''}</strong> entries
+        Cleaned: <strong>{deleteCount ?? 0}{countCapped ? '+' : ''}</strong> pages
       </p>
       {stats && (
         <p style={{ margin: '0 0 8px', fontSize: 11, color: '#9ca3af' }}>
-          Last run: found {stats.found} older than {new Date(stats.cutoff).toLocaleString()}
-          {stats.mode === 'deleteUrl' && ` · whitelisted ${stats.skipped} · failed ${stats.failed}`}
-          {stats.firstFailure && ` · first failure: ${stats.firstFailure}`}
-          {' · '}history API sees {stats.visible} entries
-          {stats.oldestVisit !== null && `, oldest visit ${new Date(stats.oldestVisit).toLocaleString()}`}
+          Last run: {stats.found}{countCapped ? '+' : ''} pages had visits before {new Date(stats.cutoff).toLocaleString()}
+          {stats.skipped > 0 && ` · ${stats.skipped} whitelisted (${stats.protectedVisits} visits kept)`}
+          {' · '}history API sees {stats.visible} pages
+          {stats.oldestVisit !== null && `, oldest last visit ${new Date(stats.oldestVisit).toLocaleString()}`}
         </p>
       )}
       {lastError && (

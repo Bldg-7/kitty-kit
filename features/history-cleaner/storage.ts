@@ -40,19 +40,17 @@ export const lastError = storage.defineItem<string | null>(
 
 /** Breakdown of the last run, so a run that "deleted nothing" can be explained. */
 export interface RunStats {
-  /** Entries the history search reported as older than the cutoff. */
+  /** Pages the history search reported as having a visit before the cutoff (capped). */
   found: number;
-  /** Entries skipped because their domain is whitelisted. */
+  /** Of those, pages on whitelisted domains (their visits were preserved). */
   skipped: number;
-  /** Entries whose deletion threw. */
-  failed: number;
-  /** Message of the first deletion error, if any. */
-  firstFailure: string | null;
-  /** Which deletion strategy ran. */
-  mode: 'deleteRange' | 'deleteUrl';
+  /** Whitelisted visit timestamps before the cutoff that were carved out of the deletion. */
+  protectedVisits: number;
+  /** Number of deleteRange calls the run issued. */
+  rangeCalls: number;
   /** The cutoff timestamp (ms) the run used. */
   cutoff: number;
-  /** How many entries a cutoff-free search returned (capped), to tell "API sees nothing" from "nothing is old enough". */
+  /** How many pages a cutoff-free search returned (capped), to tell "API sees nothing" from "nothing is old enough". */
   visible: number;
   /** Oldest lastVisitTime (ms) among those, or null when none. */
   oldestVisit: number | null;

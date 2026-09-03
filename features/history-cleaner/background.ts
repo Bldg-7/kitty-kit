@@ -3,12 +3,10 @@ import * as store from './storage';
 
 const ALARM_NAME = 'history-cleaner';
 
-// history.search() caps its result set (and sorts it newest-first), so a
-// single search never sees more than this many old entries. A large Firefox
-// profile — Firefox keeps years of history, unlike Chrome's 90-day expiry —
-// can easily have far more than this, and the *oldest* entries would be the
-// ones left over. Cleanup therefore keeps searching until nothing deletable is
-// left instead of trusting one page of results.
+// history.search() caps its result set (and sorts it newest-first). Deletion
+// itself does not depend on the search (deleteRange covers the whole span), so
+// the cap only limits the reported counts and how many pages of a whitelisted
+// domain can be enumerated per search.
 const PAGE_SIZE = 10000;
 
 function isWhitelisted(url: string, wl: string[]): boolean {
@@ -32,16 +30,6 @@ async function searchOlderThan(cutoff: number) {
 }
 
 /**
- * Deletes visits older than `cutoff`, honouring the domain whitelist.
- *
- * - Without a whitelist, one `history.deleteRange()` call removes every visit
- *   in the range at once. This is exact (recent visits to the same URL are
- *   kept), has no result cap, and is far faster than per-URL deletion, which
- *   in Firefox costs on the order of 10 ms per URL.
- * - With a whitelist, entries must be inspected individually, so the search +
- *   `deleteUrl` sweep is repeated until a pass finds nothing left to delete.
- */
-/**
  * A cutoff-free look at what the history API exposes at all, so a run that
  * finds nothing can be told apart from history the API does not see.
  */
@@ -56,50 +44,107 @@ async function sampleVisible(): Promise<Pick<store.RunStats, 'visible' | 'oldest
   return { visible: all.length, oldestVisit };
 }
 
+/**
+ * Collects every visit time before `cutoff` that belongs to a whitelisted
+ * domain. Pages are enumerated both from the generic cutoff search and from a
+ * per-domain text search, so a whitelisted domain with more pages than one
+ * search returns is still fully protected.
+ */
+async function collectProtectedVisitTimes(
+  cutoff: number,
+  wl: string[],
+  seed: Browser.history.HistoryItem[],
+): Promise<number[]> {
+  const urls = new Set<string>();
+  for (const item of seed) {
+    if (item.url && isWhitelisted(item.url, wl)) urls.add(item.url);
+  }
+  for (const domain of wl) {
+    const hits = await browser.history.search({
+      text: domain,
+      startTime: 0,
+      endTime: cutoff,
+      maxResults: PAGE_SIZE,
+    });
+    for (const item of hits) {
+      if (item.url && isWhitelisted(item.url, wl)) urls.add(item.url);
+    }
+  }
+
+  const times = new Set<number>();
+  for (const url of urls) {
+    const visits = await browser.history.getVisits({ url });
+    for (const v of visits) {
+      if (typeof v.visitTime === 'number' && v.visitTime <= cutoff) {
+        times.add(Math.floor(v.visitTime));
+      }
+    }
+  }
+  return [...times].sort((a, b) => a - b);
+}
+
+/**
+ * Deletes every visit in [0, cutoff] except those at the given (sorted, ms)
+ * timestamps, by issuing deleteRange over the gaps between them. Firefox
+ * treats endTime as inclusive and reports visit times truncated to the
+ * millisecond, so a gap ends 1 ms before a protected visit and the next one
+ * starts 1 ms after it; Chrome's endTime is exclusive, so the gap can end at
+ * the protected time itself. A stray visit inside that 1 ms guard survives,
+ * which real browsing never produces.
+ */
+async function deleteVisitsBeforeExcept(cutoff: number, protectedTimes: number[]): Promise<number> {
+  let start = 0;
+  let calls = 0;
+  for (const t of protectedTimes) {
+    const end = import.meta.env.FIREFOX ? t - 1 : t;
+    if (end > start || (end === start && import.meta.env.FIREFOX)) {
+      await browser.history.deleteRange({ startTime: start, endTime: end });
+      calls++;
+    }
+    start = Math.max(start, t + 1);
+  }
+  if (start <= cutoff) {
+    await browser.history.deleteRange({ startTime: start, endTime: cutoff });
+    calls++;
+  }
+  return calls;
+}
+
+/**
+ * Deletes visits made before `cutoff`. Only visits are removed: a page that
+ * was visited again after the cutoff keeps those later visits, and pages on
+ * whitelisted domains keep all of theirs.
+ *
+ * Deletion is done with `history.deleteRange()` rather than one
+ * `history.deleteUrl()` per page: deleteUrl drops *every* visit of the page,
+ * including ones after the cutoff, and per-URL deletion is slow in Firefox
+ * (~10 ms each) and limited by the search result cap.
+ */
 async function deleteOlderThan(cutoff: number, wl: string[]): Promise<store.RunStats> {
   const sample = await sampleVisible();
+  const found = await searchOlderThan(cutoff);
+  await store.lastDeleteCountCapped.setValue(found.length >= PAGE_SIZE);
+
+  const stats: store.RunStats = {
+    found: found.length,
+    skipped: 0,
+    protectedVisits: 0,
+    rangeCalls: 0,
+    cutoff,
+    ...sample,
+  };
+  if (found.length === 0) return stats;
+
   if (wl.length === 0) {
-    const found = await searchOlderThan(cutoff);
-    const stats: store.RunStats = {
-      found: found.length, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteRange', cutoff, ...sample,
-    };
-    await store.lastDeleteCountCapped.setValue(false);
-    if (found.length === 0) return stats;
     await browser.history.deleteRange({ startTime: 0, endTime: cutoff });
-    // deleteRange itself has no cap, but the count comes from the capped
-    // search, so flag it as a lower bound when the search was full.
-    await store.lastDeleteCountCapped.setValue(found.length >= PAGE_SIZE);
+    stats.rangeCalls = 1;
     return stats;
   }
 
-  await store.lastDeleteCountCapped.setValue(false);
-  const stats: store.RunStats = {
-    found: 0, skipped: 0, failed: 0, firstFailure: null, mode: 'deleteUrl', cutoff, ...sample,
-  };
-  // Loop while a pass still makes progress. A pass that deletes nothing means
-  // everything left in range is whitelisted (or undeletable), so stop.
-  for (;;) {
-    const results = await searchOlderThan(cutoff);
-    stats.found += results.length;
-    let deletedThisPass = 0;
-    for (const item of results) {
-      if (!item.url || isWhitelisted(item.url, wl)) {
-        stats.skipped++;
-        continue;
-      }
-      try {
-        await browser.history.deleteUrl({ url: item.url });
-        deletedThisPass++;
-      } catch (err) {
-        // Keep sweeping so a single bad URL can't abort the whole cleanup, but
-        // don't hide it: a run that "deletes nothing" is otherwise undebuggable.
-        stats.failed++;
-        stats.firstFailure ??= `${item.url}: ${err instanceof Error ? err.message : String(err)}`;
-        console.warn(`[kitty-kit] history-cleaner: failed to delete ${item.url}`, err);
-      }
-    }
-    if (deletedThisPass === 0 || results.length < PAGE_SIZE) break;
-  }
+  stats.skipped = found.filter((item) => item.url && isWhitelisted(item.url, wl)).length;
+  const protectedTimes = await collectProtectedVisitTimes(cutoff, wl, found);
+  stats.protectedVisits = protectedTimes.length;
+  stats.rangeCalls = await deleteVisitsBeforeExcept(cutoff, protectedTimes);
   return stats;
 }
 
@@ -128,7 +173,7 @@ function runCleanup(): Promise<void> {
       const stats = await deleteOlderThan(cutoff, wl);
 
       await store.lastStats.setValue(stats);
-      await store.lastDeleteCount.setValue(stats.found - stats.skipped - stats.failed);
+      await store.lastDeleteCount.setValue(stats.found - stats.skipped);
       await store.lastError.setValue(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
