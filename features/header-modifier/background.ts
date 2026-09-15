@@ -27,6 +27,15 @@ function toResourceType(t: string): string {
   return map[t] ?? t;
 }
 
+// The resource types a rule applies to. Both dispatch paths read this so a
+// rule covers the same requests in either build: an unset or empty list means
+// main_frame only.
+function getResourceTypes(rule: Rule): string[] {
+  return rule.resourceTypes && rule.resourceTypes.length > 0
+    ? rule.resourceTypes.map(toResourceType)
+    : ['main_frame'];
+}
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -61,7 +70,12 @@ function buildUrlMatcher(rule: Rule): (url: string) => boolean {
     case 'contains':
       return (url) => url.includes(rule.urlPattern);
     case 'wildcard': {
-      const re = new RegExp('^' + escapeRegex(rule.urlPattern).replace(/\\\*/g, '.*') + '$');
+      // Chrome's declarativeNetRequest urlFilter matches the pattern as a
+      // substring of the URL. Anchoring it here made the same rule match
+      // nothing in the Firefox build ('example.com' or 'https://example.com'
+      // never matched any request), so leave it unanchored; '*' still spans
+      // any run of characters.
+      const re = new RegExp(escapeRegex(rule.urlPattern).replace(/\\\*/g, '.*'));
       return (url) => re.test(url);
     }
     case 'regex': {
@@ -123,9 +137,7 @@ async function applyDeclarativeNetRequestRules() {
         },
         condition: {
           ...buildDnrUrlCondition(rule),
-          ...(rule.resourceTypes && rule.resourceTypes.length > 0
-            ? { resourceTypes: rule.resourceTypes.map(toResourceType) }
-            : { resourceTypes: ['main_frame'] }),
+          resourceTypes: getResourceTypes(rule),
         },
       };
 
@@ -142,6 +154,7 @@ async function applyDeclarativeNetRequestRules() {
 type CompiledRule = {
   rule: Rule;
   matches: (url: string) => boolean;
+  types: Set<string>;
 };
 
 let _cachedRules: CompiledRule[] = [];
@@ -151,6 +164,7 @@ async function refreshRuleCache() {
   _cachedRules = getActiveRules(allProfiles).map((rule) => ({
     rule,
     matches: buildUrlMatcher(rule),
+    types: new Set(getResourceTypes(rule)),
   }));
 }
 
@@ -180,7 +194,10 @@ function requestHeaderListener(
   let headers = details.requestHeaders ?? [];
   let modified = false;
 
-  for (const { rule, matches } of _cachedRules) {
+  for (const { rule, matches, types } of _cachedRules) {
+    // The webRequest filter cannot express per-rule resource types, so apply
+    // the rule's own list here — otherwise every rule fired on every request.
+    if (!types.has(details.type)) continue;
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
@@ -202,7 +219,10 @@ function responseHeaderListener(
   let headers = details.responseHeaders ?? [];
   let modified = false;
 
-  for (const { rule, matches } of _cachedRules) {
+  for (const { rule, matches, types } of _cachedRules) {
+    // The webRequest filter cannot express per-rule resource types, so apply
+    // the rule's own list here — otherwise every rule fired on every request.
+    if (!types.has(details.type)) continue;
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
