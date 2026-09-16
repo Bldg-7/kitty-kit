@@ -36,6 +36,32 @@ function getResourceTypes(rule: Rule): string[] {
     : ['main_frame'];
 }
 
+// A pattern written as a bare origin ('https://example.com') would never match
+// on its own: the browser normalizes every request URL to carry a path, so the
+// URL seen here is always 'https://example.com/'. Normalize the pattern the same
+// way so both spellings mean the same rule. A pattern that is not an absolute
+// URL is matched verbatim.
+function normalizeUrlPattern(pattern: string): string {
+  try {
+    return new URL(pattern).href;
+  } catch {
+    return pattern;
+  }
+}
+
+// Firefox reports a couple of request types under names the
+// declarativeNetRequest vocabulary -- which rules are written in -- spells
+// differently. Accept either spelling so one rule covers the same requests in
+// both builds.
+const RESOURCE_TYPE_ALIASES: Record<string, string> = {
+  beacon: 'ping',
+  imageset: 'image',
+};
+
+function coversResourceType(types: Set<string>, type: string): boolean {
+  return types.has(type) || types.has(RESOURCE_TYPE_ALIASES[type] ?? '');
+}
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -52,7 +78,7 @@ function buildDnrUrlCondition(rule: Rule): Record<string, string> {
   if (isMatchAllPattern(rule.urlPattern)) return {};
   switch (getUrlMatchType(rule)) {
     case 'equals':
-      return { regexFilter: '^' + escapeRegex(rule.urlPattern) + '$' };
+      return { regexFilter: '^' + escapeRegex(normalizeUrlPattern(rule.urlPattern)) + '$' };
     case 'contains':
       return { regexFilter: escapeRegex(rule.urlPattern) };
     case 'wildcard':
@@ -65,8 +91,10 @@ function buildDnrUrlCondition(rule: Rule): Record<string, string> {
 function buildUrlMatcher(rule: Rule): (url: string) => boolean {
   if (isMatchAllPattern(rule.urlPattern)) return () => true;
   switch (getUrlMatchType(rule)) {
-    case 'equals':
-      return (url) => url === rule.urlPattern;
+    case 'equals': {
+      const target = normalizeUrlPattern(rule.urlPattern);
+      return (url) => url === target;
+    }
     case 'contains':
       return (url) => url.includes(rule.urlPattern);
     case 'wildcard': {
@@ -197,7 +225,7 @@ function requestHeaderListener(
   for (const { rule, matches, types } of _cachedRules) {
     // The webRequest filter cannot express per-rule resource types, so apply
     // the rule's own list here — otherwise every rule fired on every request.
-    if (!types.has(details.type)) continue;
+    if (!coversResourceType(types, details.type)) continue;
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
@@ -222,7 +250,7 @@ function responseHeaderListener(
   for (const { rule, matches, types } of _cachedRules) {
     // The webRequest filter cannot express per-rule resource types, so apply
     // the rule's own list here — otherwise every rule fired on every request.
-    if (!types.has(details.type)) continue;
+    if (!coversResourceType(types, details.type)) continue;
     if (!matches(details.url)) continue;
 
     for (const action of rule.headers) {
