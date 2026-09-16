@@ -7,6 +7,15 @@ export interface Preset {
   createRule: () => Rule;
 }
 
+// Every request type both builds understand. A rule that sets no resource types
+// covers main_frame only, which is too narrow for presets meant to apply to a
+// whole page load. Firefox's own 'beacon' and 'imageset' spellings are folded
+// onto 'ping' and 'image' by the background, so they are covered too.
+const ALL_RESOURCE_TYPES = [
+  'main_frame', 'sub_frame', 'stylesheet', 'script', 'image', 'font', 'object',
+  'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'other',
+];
+
 let presetCounter = 0;
 function nextId() {
   return `preset-${Date.now()}-${presetCounter++}`;
@@ -54,6 +63,7 @@ export const presets: Preset[] = [
       id: nextId(),
       enabled: true,
       urlPattern: '<all_urls>',
+      resourceTypes: ALL_RESOURCE_TYPES,
       headers: [
         { operation: 'set', header: 'Cache-Control', value: 'no-cache, no-store, must-revalidate', direction: 'request' },
         { operation: 'set', header: 'Pragma', value: 'no-cache', direction: 'request' },
@@ -68,6 +78,7 @@ export const presets: Preset[] = [
       id: nextId(),
       enabled: true,
       urlPattern: '<all_urls>',
+      resourceTypes: ALL_RESOURCE_TYPES,
       headers: [
         { operation: 'set', header: 'User-Agent', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', direction: 'request' },
       ],
